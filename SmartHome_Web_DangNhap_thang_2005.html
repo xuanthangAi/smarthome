@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="vi">
+	<head>
+		<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1">
+				<title>Xuân Thắng AI SmartHome • Web</title>
+				<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+				<style>
+					:root{--bg:#0f172a;--card:#1e293b;--line:#334155;--tx:#f8fafc;--mut:#94a3b8;--blue:#38bdf8;--green:#10b981;--yellow:#eab308;--orange:#f97316;--red:#ef4444}
+					*{box-sizing:border-box}
+					body{margin:0;background:var(--bg);color:var(--tx);font-family:"Segoe UI",system-ui,sans-serif;padding:16px}
+					.wrap{max-width:1000px;margin:0 auto}
+					.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
+					h1{margin:0;font-size:22px}
+					.sub{color:var(--mut);font-size:13px;margin-top:4px}
+					.row{display:flex;gap:12px;flex-wrap:wrap}
+					.row>.card{flex:1 1 260px;margin-bottom:0}
+					.lbl{color:var(--mut);font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+					.big{font-size:40px;font-weight:700;margin-top:8px}
+					.mono{font-family:Consolas,monospace}
+					.badge{display:inline-block;padding:6px 10px;border-radius:8px;background:var(--bg);color:var(--mut);font-weight:700;font-size:13px}
+					.badge.on{background:#065f46;color:#34d399}
+					button{border:0;border-radius:8px;padding:9px 14px;font-weight:700;cursor:pointer;color:#fff;background:#334155;font-size:13px}
+					button.on{background:#dc2626}
+					button.off{background:var(--green)}
+					button.auto{background:#0369a1}
+					button.man{background:#d97706}
+					button:disabled{opacity:.45;cursor:not-allowed}
+					.fans{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+					.fans>div{display:flex;flex-direction:column;gap:6px}
+					.leds{display:flex;gap:8px;flex-wrap:wrap}
+					.pill{background:var(--bg);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:700;color:#64748b;display:flex;align-items:center;gap:6px}
+					.pill i{font-style:normal;color:#475569;font-size:16px}
+					.pill.act{color:var(--tx)}
+					.status{display:flex;gap:8px;align-items:center;font-size:13px;flex-wrap:wrap}
+					.dot{width:10px;height:10px;border-radius:50%;background:#64748b;display:inline-block}
+					.set{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-top:10px}
+					input,select{background:var(--bg);border:1px solid var(--line);color:var(--tx);border-radius:8px;padding:8px;font-size:13px;min-width:0}
+					canvas{width:100%;height:260px;background:var(--bg);border-radius:8px;display:block}
+					.sch-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+					.sch-left{display:flex;align-items:center;flex-wrap:wrap;gap:6px;font-size:13px;color:#cbd5e1}
+					.days{display:flex;gap:4px;margin-left:4px}
+					.dbtn{padding:6px 0;width:32px;border-radius:6px;background:var(--bg);color:#64748b;font-size:12px}
+					.dbtn.sel{background:#0369a1;color:#fff}
+					.sch-list{margin-top:10px;display:flex;flex-direction:column;gap:4px}
+					.sch-item{background:var(--bg);border-radius:8px;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;font-size:13px;gap:8px;flex-wrap:wrap}
+					.sch-item.dim{color:#64748b}
+					.sm-btn{padding:4px 10px;font-size:12px;border-radius:6px}
+					@media(max-width:640px){.set{grid-template-columns:1fr}}
+                    .login-screen{min-height:calc(100vh - 32px);display:flex;justify-content:center;align-items:center}
+                    .login-box{width:min(100%,400px);padding:28px}
+                    .login-box input{display:block;width:100%;margin:12px 0}
+                    .login-box button{width:100%;margin-top:8px;background:#0284c7}
+                    .login-error{color:#f87171;min-height:20px;font-size:13px;margin-top:10px}
+                    #app{display:none}
+                    .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+				</style>
+			</head>
+	<body>
+        <section id="loginScreen" class="login-screen">
+            <form id="loginForm" class="card login-box" autocomplete="off">
+                <h1>ĐĂNG NHẬP SMART HOME</h1>
+                <p class="sub">Nhập tài khoản và mật khẩu để mở bảng điều khiển.</p>
+                <input id="loginUser" type="text" placeholder="Tài khoản" autocomplete="username" required>
+                <input id="loginPass" type="password" placeholder="Mật khẩu" autocomplete="current-password" required>
+                <button type="submit">Đăng nhập</button>
+                <div id="loginError" class="login-error" role="alert"></div>
+            </form>
+        </section>
+		<div class="wrap" id="app">
+			<div class="card">
+                <div class="topbar"><h1>XUÂN THẮNG AI SMART HOME</h1><button id="logoutBtn" type="button">Đăng xuất</button></div>
+				<div class="sub">Giám sát nhiệt độ LM35 • Điều khiển quạt &amp; Hẹn giờ từ xa qua MQTT</div>
+                <div class="set" style="grid-template-columns:1fr auto">
+                    <input id="url" placeholder="wss://broker.emqx.io:8084/mqtt">
+                    <button id="conn" class="auto">Kết nối</button>
+                </div>
+				<div class="set" style="grid-template-columns:1fr 1fr">
+					<input id="tstate" placeholder="Topic trạng thái" value="xuanthang/home/state">
+						<input id="tcmd" placeholder="Topic lệnh" value="xuanthang/home/cmd">
+            </div>
+				<div class="status" style="margin-top:12px">
+					<span class="dot" id="mdot"></span>
+					<span id="mtxt">MQTT: chưa kết nối</span>
+					<span style="color:var(--mut)">•</span>
+					<span class="dot" id="ddot"></span>
+					<span id="dtxt">Chưa có dữ liệu từ thiết bị</span>
+				</div>
+			</div>
+
+			<div class="row" style="margin-bottom:12px">
+				<div class="card">
+					<div class="lbl">Nhiệt độ môi trường (LM35)</div>
+					<div class="big" id="temp">— °C</div>
+				</div>
+				<div class="card">
+					<div class="lbl">Thời gian hoạt động</div>
+					<div class="big mono" id="up">00:00:00</div>
+				</div>
+				<div class="card">
+					<div style="display:flex;justify-content:space-between;align-items:center">
+						<div class="lbl">Điều khiển quạt</div>
+						<button id="mode" class="auto" disabled="">Chế độ: TỰ ĐỘNG</button>
+					</div>
+					<div class="fans">
+						<div>
+							<span class="badge" id="b1">Quạt 1: —</span>
+							<button id="f1" disabled="">Bật Quạt 1</button>
+						</div>
+						<div>
+							<span class="badge" id="b2">Quạt 2: —</span>
+							<button id="f2" disabled="">Bật Quạt 2</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="card">
+				<div class="leds" id="leds">
+					<div class="pill">
+						<i>●</i>Bình thường (&lt;30°C)
+					</div>
+					<div class="pill">
+						<i>●</i>Quạt 1 (&gt;30°C)
+					</div>
+					<div class="pill">
+						<i>●</i>Quạt 2 (&gt;35°C)
+					</div>
+					<div class="pill">
+						<i>●</i>Quá nhiệt (≥40°C)
+					</div>
+				</div>
+			</div>
+
+			<div class="card">
+				<div class="sch-row">
+					<div class="sch-left">
+						<span class="lbl" style="font-size:12px;margin-right:4px">Hẹn giờ:</span>
+						<select id="sfan">
+							<option value="1">Quạt 1</option>
+							<option value="2">Quạt 2</option>
+							<option value="3">Cả 2 quạt</option>
+						</select>
+						<select id="sact">
+							<option value="on">Bật</option>
+							<option value="off">Tắt</option>
+							<option value="auto">Về tự động</option>
+						</select>
+						<input id="sh" type="number" min="0" max="23" value="18" style="width:54px;text-align:center">
+							<b>:</b>
+							<input id="sm" type="number" min="0" max="59" value="00" style="width:54px;text-align:center">
+								<div class="days" id="days"></div>
+							</div>
+					<button id="addSch" class="auto">Thêm lịch</button>
+				</div>
+
+				<div class="sch-row" style="margin-top:8px">
+					<div class="sch-left">
+						<span>Hoặc hẹn một lần sau</span>
+						<input id="smin" type="number" min="1" max="1440" value="30" style="width:68px;text-align:center">
+							<span>phút (dùng quạt và hành động đã chọn ở trên)</span>
+						</div>
+					<button id="addTmr">Đặt hẹn</button>
+				</div>
+
+				<div class="sch-list" id="slist"></div>
+			</div>
+
+			<div class="card">
+				<div class="lbl" style="margin-bottom:8px">Biểu đồ nhiệt độ (120 mẫu gần nhất)</div>
+				<canvas id="chart"></canvas>
+			</div>
+		</div>
+
+		<script>
+			const $ = id => document.getElementById(id);
+			const COLORS = ["#10b981","#eab308","#f97316","#ef4444"];
+			const DAY_NAMES = ["T2","T3","T4","T5","T6","T7","CN"];
+			const FAN_NAMES = {1:"Quạt 1", 2:"Quạt 2", 3:"Cả 2 quạt"};
+			const ACT_NAMES = {on:"Bật", off:"Tắt", auto:"Về tự động"};
+
+            // Đăng nhập phía trình duyệt: chỉ khóa giao diện, KHÔNG bảo vệ MQTT broker công khai.
+            const LOGIN_USER = "thang";
+            const LOGIN_PASS = "2005";
+            let loggedIn = false;
+            function showApp(allow){
+                loggedIn = allow;
+                $("loginScreen").style.display = allow ? "none" : "flex";
+                $("app").style.display = allow ? "block" : "none";
+                if(allow) draw();
+            }
+            $("loginForm").addEventListener("submit", function(event){
+                event.preventDefault();
+                if($("loginUser").value.trim() === LOGIN_USER && $("loginPass").value === LOGIN_PASS){
+                    $("loginError").textContent = "";
+                    $("loginPass").value = "";
+                    showApp(true);
+                }else{
+                    $("loginError").textContent = "Sai tài khoản hoặc mật khẩu!";
+                    $("loginPass").value = "";
+                }
+            });
+            $("logoutBtn").addEventListener("click", function(){
+                if(client){client.end(true);client=null;}
+                $("conn").textContent="Kết nối";
+                setMqtt("#64748b","MQTT: chưa kết nối");
+                $("loginUser").value="";
+                $("loginPass").value="";
+                showApp(false);
+            });
+			let client = null, state = null, lastMsg = 0, history = [];
+			let schedules = [], timers = [], schedFired = {}, daySel = [true,true,true,true,true,true,true];
+
+			function load(){
+			try{
+			const s = JSON.parse(localStorage.getItem("sh_cfg")||"{}");
+			$("url").value = s.url || "wss://broker.emqx.io:8084/mqtt";
+			if(s.tstate) $("tstate").value = s.tstate;
+			if(s.tcmd) $("tcmd").value = s.tcmd;
+			}catch(e){ $("url").value = "wss://broker.emqx.io:8084/mqtt"; }
+
+			try{
+			schedules = JSON.parse(localStorage.getItem("sh_schedules")||"[]");
+			}catch(e){ schedules = []; }
+			}
+
+			function save(){
+			try{
+			localStorage.setItem("sh_cfg", JSON.stringify({
+			url:$("url").value,
+			tstate:$("tstate").value, tcmd:$("tcmd").value}));
+			}catch(e){}
+			}
+
+			function saveSchedules(){
+			try{ localStorage.setItem("sh_schedules", JSON.stringify(schedules)); }catch(e){}
+			}
+
+			function setMqtt(color, text){ $("mdot").style.background = color; $("mtxt").textContent = text; }
+
+			function connect(){
+            if(!loggedIn) return;
+			if(client){ client.end(true); client = null; $("conn").textContent = "Kết nối"; setMqtt("#64748b","MQTT: đã ngắt"); return; }
+			save();
+			const opts = { clientId:"web_"+Math.random().toString(16).slice(2,10), reconnectPeriod:3000, connectTimeout:8000 };
+			setMqtt("#eab308","MQTT: đang kết nối...");
+			try{ client = mqtt.connect($("url").value.trim(), opts); }
+			catch(e){ setMqtt("#ef4444","MQTT lỗi: "+e.message); client=null; return; }
+			$("conn").textContent = "Ngắt kết nối";
+			client.on("connect", () => {
+			setMqtt("#10b981","MQTT: đã kết nối");
+			client.subscribe($("tstate").value.trim());
+			});
+			client.on("reconnect", () => setMqtt("#eab308","MQTT: đang kết nối lại..."));
+			client.on("close", () => setMqtt("#f59e0b","MQTT: mất kết nối"));
+			client.on("error", e => setMqtt("#ef4444","MQTT lỗi: "+e.message));
+			client.on("message", (t, payload) => {
+			try{
+			const data = JSON.parse(payload.toString());
+			render(data);
+			}catch(e){}
+			});
+			}
+
+			function send(obj){
+            if(!loggedIn) return;
+			if(client && client.connected) client.publish($("tcmd").value.trim(), JSON.stringify(obj));
+			}
+
+			function render(d){
+			if(!d || typeof d.temperature === "undefined") return;
+			state = d; lastMsg = Date.now();
+			const t = parseFloat(d.temperature);
+			$("temp").textContent = t.toFixed(1) + " °C";
+			$("temp").style.color = t>=40?"var(--red)":t>35?"var(--orange)":t>30?"var(--yellow)":"var(--blue)";
+
+			const u = parseInt(d.uptime, 10)|0, p = n => String(n).padStart(2,"0");
+			$("up").textContent = p(Math.floor(u/3600))+":"+p(Math.floor(u%3600/60))+":"+p(u%60);
+
+			fan(1, parseInt(d.fan1, 10));
+			fan(2, parseInt(d.fan2, 10));
+
+			const manual = d.mode === "manual";
+			$("mode").textContent = manual ? "Chế độ: THỦ CÔNG" : "Chế độ: TỰ ĐỘNG";
+			$("mode").className = manual ? "man" : "auto";
+			$("mode").disabled = !manual;
+
+			const leds = d.leds || [0, 0, 0, 0];
+			const pillElements = document.querySelectorAll("#leds .pill");
+			pillElements.forEach((el, i) => {
+			const on = leds[i] === 1 || leds[i] === true;
+			el.classList.toggle("act", !!on);
+			const dot = el.querySelector("i");
+			if(dot) dot.style.color = on ? COLORS[i] : "#475569";
+			});
+
+			history.push(t); history = history.slice(-120); draw();
+			}
+
+			function fan(n, v){
+			const b = $("b"+n), f = $("f"+n), on = (v === 1 || v === true);
+			b.textContent = "Quạt "+n+": "+(on?"ĐANG BẬT":"ĐANG TẮT");
+			b.className = "badge"+(on?" on":"");
+			f.textContent = (on?"Tắt":"Bật")+" Quạt "+n;
+			f.className = on ? "on" : "off";
+			f.disabled = false;
+			}
+
+			$("f1").onclick = () => state && send({fan1: state.fan1 ? 0 : 1});
+			$("f2").onclick = () => state && send({fan2: state.fan2 ? 0 : 1});
+			$("mode").onclick = () => send({mode:"auto"});
+			$("conn").onclick = connect;
+
+			function buildDayButtons(){
+			$("days").innerHTML = "";
+			DAY_NAMES.forEach((name, i) => {
+			const b = document.createElement("button");
+			b.type = "button";
+			b.textContent = name;
+			b.className = "dbtn" + (daySel[i] ? " sel" : "");
+			b.onclick = () => { daySel[i] = !daySel[i]; buildDayButtons(); };
+			$("days").appendChild(b);
+			});
+			}
+
+			$("addSch").onclick = () => {
+			const h = parseInt($("sh").value, 10), m = parseInt($("sm").value, 10);
+			if(isNaN(h) || isNaN(m) || h < 0 || h > 23 || m < 0 || m > 59){
+                $("dtxt").textContent = "Giờ không hợp lệ (giờ 0-23, phút 0-59)"; return;
+            }
+            const days = daySel.map((v, i) => v ? i : -1).filter(i => i !== -1);
+            if(!days.length){
+                $("dtxt").textContent = "Chọn ít nhất một ngày trong tuần"; return;
+            }
+            const fan = parseInt($("sfan").value, 10), act = $("sact").value;
+            const timeStr = String(h).padStart(2,"0") + ":" + String(m).padStart(2,"0");
+            const newId = schedules.reduce((mx, s) => Math.max(mx, s.id), 0) + 1;
+            schedules.push({id: newId, fan, act, time: timeStr, days, enabled: true});
+            schedules.sort((a, b) => a.time.localeCompare(b.time));
+            saveSchedules();
+            refreshScheduleList();
+            $("dtxt").textContent = "Đã thêm lịch lúc " + timeStr;
+        };
+
+        $("addTmr").onclick = () => {
+            const mins = parseInt($("smin").value, 10);
+            if(isNaN(mins) || mins < 1){
+                $("dtxt").textContent = "Nhập số phút từ 1 trở lên"; return;
+            }
+            const fan = parseInt($("sfan").value, 10), act = $("sact").value;
+            timers.push({id: Date.now() + Math.random(), fan, act, at: Date.now() + mins * 60000});
+            refreshScheduleList();
+            $("dtxt").textContent = "Đã hẹn sau " + mins + " phút";
+        };
+
+        function runAction(fan, act, source){
+            if(!loggedIn) return;
+            if(!client || !client.connected){
+                $("dtxt").textContent = source + ": chưa gửi được vì chưa kết nối MQTT"; return;
+            }
+            if(act === "auto"){
+                send({mode: "auto"});
+                $("dtxt").textContent = source + ": đã gửi lệnh về chế độ TỰ ĐỘNG";
+                return;
+            }
+            const want = act === "on" ? 1 : 0;
+            if(fan === 3) send({fan1: want, fan2: want});
+            else send({["fan" + fan]: want});
+            $("dtxt").textContent = source + ": " + ACT_NAMES[act] + " " + FAN_NAMES[fan];
+        }
+
+        function refreshScheduleList(){
+            const box = $("slist");
+            box.innerHTML = "";
+
+            timers.forEach(t => {
+                const left = Math.max(0, Math.floor((t.at - Date.now()) / 1000));
+                const mm = String(Math.floor(left / 60)).padStart(2,"0"), ss = String(left % 60).padStart(2,"0");
+                const row = document.createElement("div");
+                row.className = "sch-item";
+                row.innerHTML = `<span>Hẹn một lần &nbsp;•&nbsp; ${ACT_NAMES[t.act]} ${FAN_NAMES[t.fan]} &nbsp;•&nbsp; còn ${mm}:${ss}</span>`;
+			const btn = document.createElement("button");
+			btn.className = "sm-btn";
+			btn.textContent = "Hủy";
+			btn.onclick = () => { timers = timers.filter(x => x.id !== t.id); refreshScheduleList(); };
+			row.appendChild(btn);
+			box.appendChild(row);
+			});
+
+			schedules.forEach(s => {
+			const days = s.days.length === 7 ? "Mỗi ngày" : s.days.slice().sort().map(i => DAY_NAMES[i]).join(" ");
+			const what = s.act === "auto" ? ACT_NAMES[s.act] : `${ACT_NAMES[s.act]} ${FAN_NAMES[s.fan]}`;
+			const row = document.createElement("div");
+			row.className = "sch-item" + (s.enabled ? "" : " dim");
+			row.innerHTML = `<span>${s.time} &nbsp;•&nbsp; ${what} &nbsp;•&nbsp; ${days}</span>`;
+
+			const acts = document.createElement("div");
+			acts.style.display = "flex";
+			acts.style.gap = "6px";
+
+			const bToggle = document.createElement("button");
+			bToggle.className = "sm-btn";
+			bToggle.textContent = s.enabled ? "Tạm dừng" : "Chạy lại";
+			bToggle.onclick = () => { s.enabled = !s.enabled; saveSchedules(); refreshScheduleList(); };
+
+			const bDel = document.createElement("button");
+			bDel.className = "sm-btn";
+			bDel.textContent = "Xóa";
+			bDel.onclick = () => { schedules = schedules.filter(x => x.id !== s.id); saveSchedules(); refreshScheduleList(); };
+
+			acts.appendChild(bToggle);
+			acts.appendChild(bDel);
+			row.appendChild(acts);
+			box.appendChild(row);
+			});
+
+			if(!timers.length && !schedules.length){
+			box.innerHTML = `<div style="color:#64748b;font-size:13px">Chưa có lịch nào. Chọn giờ rồi bấm “Thêm lịch”.</div>`;
+			}
+			}
+
+			setInterval(()=>{
+			const now = new Date();
+			const hhmm = String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0");
+			const stamp = now.getFullYear() + "-" + (now.getMonth()+1) + "-" + now.getDate() + " " + hhmm;
+			const weekday = (now.getDay() + 6) % 7;
+
+			for(const s of schedules){
+			if(s.enabled && s.time === hhmm && s.days.includes(weekday) && schedFired[s.id] !== stamp){
+			schedFired[s.id] = stamp;
+			runAction(s.fan, s.act, "Lịch " + s.time);
+			}
+			}
+
+			const due = timers.filter(t => Date.now() >= t.at);
+			for(const t of due) runAction(t.fan, t.act, "Hẹn giờ");
+			if(due.length){
+			timers = timers.filter(t => !due.includes(t));
+			refreshScheduleList();
+			} else if(timers.length){
+			refreshScheduleList();
+			}
+
+			if(!lastMsg) return;
+			const age = (Date.now()-lastMsg)/1000;
+			if(age < 5){ $("ddot").style.background="#10b981"; $("dtxt").textContent="Đang nhận dữ liệu từ thiết bị"; }
+            else{ $("ddot").style.background="#f59e0b"; $("dtxt").textContent="Không có dữ liệu mới ("+Math.round(age)+"s) – kiểm tra Python/UART"; }
+        }, 1000);
+
+        function draw(){
+            const c = $("chart"), dpr = window.devicePixelRatio||1;
+            const w = c.clientWidth, h = c.clientHeight;
+            c.width = w*dpr; c.height = h*dpr;
+            const g = c.getContext("2d"); g.scale(dpr,dpr);
+            const L=40,R=12,T=12,B=20, pw=w-L-R, ph=h-T-B;
+            const max = Math.max(50, Math.max(0,...history)+5);
+            const y = v => T+ph-(v/max)*ph;
+            g.font="11px Segoe UI"; g.textAlign="right"; g.textBaseline="middle";
+            for(const v of [0,10,20,30,40,50]){
+                g.strokeStyle="#1e293b"; g.beginPath(); g.moveTo(L,y(v)); g.lineTo(w-R,y(v)); g.stroke();
+                g.fillStyle="#64748b"; g.fillText(v+"°",L-6,y(v));
+            }
+            g.setLineDash([6,4]);
+            for(const [v,col] of [[30,"#eab308"],[35,"#f97316"],[40,"#ef4444"]]){
+                g.strokeStyle=col; g.beginPath(); g.moveTo(L,y(v)); g.lineTo(w-R,y(v)); g.stroke();
+            }
+            g.setLineDash([]);
+            if(history.length>1){
+                g.beginPath();
+                history.forEach((v,i)=>{ const x=L+i*pw/119; i?g.lineTo(x,y(v)):g.moveTo(x,y(v)); });
+                g.strokeStyle="#38bdf8"; g.lineWidth=2.5; g.stroke();
+                const lx=L+(history.length-1)*pw/119, ly=y(history[history.length-1]);
+                g.fillStyle="#f8fafc"; g.beginPath(); g.arc(lx,ly,4,0,7); g.fill();
+            }
+        }
+        window.addEventListener("resize", draw);
+        load(); buildDayButtons(); refreshScheduleList(); draw();
+		</script>
+	</body>
+</html>
