@@ -1,2 +1,2 @@
 # smarthome
-Xuân Thắng AI SmartHome
+index.html
